@@ -1,6 +1,43 @@
+import javafx.geometry.Pos;
+import org.rspeer.runetek.adapter.component.InterfaceComponent;
+import org.rspeer.runetek.adapter.scene.SceneObject;
+import org.rspeer.runetek.api.Game;
+import org.rspeer.runetek.api.commons.StopWatch;
+import org.rspeer.runetek.api.commons.Time;
+import org.rspeer.runetek.api.component.Dialog;
+import org.rspeer.runetek.api.component.GrandExchange;
+import org.rspeer.runetek.api.component.Interfaces;
+import org.rspeer.runetek.api.component.tab.Inventory;
+import org.rspeer.runetek.api.component.tab.Skill;
+import org.rspeer.runetek.api.component.tab.Skills;
+import org.rspeer.runetek.api.component.tab.Spell;
+import org.rspeer.runetek.api.movement.Movement;
+import org.rspeer.runetek.api.movement.position.Area;
+import org.rspeer.runetek.api.movement.position.Position;
+import org.rspeer.runetek.api.scene.House;
+import org.rspeer.runetek.api.scene.Npcs;
+import org.rspeer.runetek.api.scene.Players;
+import org.rspeer.runetek.api.scene.SceneObjects;
+import org.rspeer.runetek.event.types.RenderEvent;
+import org.rspeer.script.Script;
+import org.rspeer.script.ScriptMeta;
+import org.rspeer.script.ScriptCategory;
+import org.rspeer.runetek.api.component.Bank;
+import org.rspeer.script.task.TaskChangeListener;
+import org.rspeer.ui.Log;
+import org.rspeer.runetek.adapter.scene.Player;
+import org.rspeer.runetek.event.listeners.RenderListener;
+
+import java.awt.*;
+import java.time.Instant;
+
+@ScriptMeta(name = "CucBracelets ",  desc = "Makes gold bracelets at Edgeville", developer = "Cucumberman", category = ScriptCategory.SMITHING)
+public class SmitherMain extends Script implements RenderListener {
+
     private StopWatch stopWatch;
     public boolean HAVE_BARS = false;
     public boolean SMITHING;
+    private Instant lastAnimation;
 
     private static final Skill skill = Skill.CRAFTING;
     private static final int INIT_XP = Skills.getExperience(skill);
@@ -30,6 +67,7 @@
         SceneObject BOOTH = SceneObjects.getNearest("Grand Exchange booth");
         SceneObject BANK = SceneObjects.getNearest("Bank booth");
 
+        Area SMITH_AREA = Area.rectangular(3105, 3501, 3110, 3496);
         Area GRAND_EXCHANGE = Area.rectangular(3159, 3494, 3171, 3483);
         InterfaceComponent SMITH_INTERFACE = Interfaces.getComponent(446, 0);
         InterfaceComponent BAR_INTERFACE = Interfaces.getComponent(446, 46);
@@ -49,7 +87,7 @@
         }
 
 
-        if (!Movement.isRunEnabled() && Movement.getRunEnergy() > 20 && !Bank.isOpen() && SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible()){
+        if (!Movement.isRunEnabled() && Movement.getRunEnergy() > 20 && !Bank.isOpen() && !SMITH_AREA.contains(Local)){
             Log.info("We have energy, let's run");
             Movement.toggleRun(true);
             return 1000;
@@ -76,25 +114,40 @@
             SMITHING = false;
         }
 
+        if (!Game.isLoggedIn()) {
+            Log.info("NNot logged in");
+        }
+
         if (Dialog.isViewingChat()) {
             Dialog.processContinue();
             SMITHING = false;
         }
 
 
-
         if (SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible() && Inventory.contains("Bracelet mould") && HAVE_BARS) {
             BAR_INTERFACE.click();
-            Time.sleepUntil(() -> !Local.isAnimating(), 300, 10000);
+            Time.sleepUntil(() -> !Inventory.contains("Gold bar"), 2500, 2500);
             SMITHING = true;
 
         }
-        if (Inventory.contains("Bracelet mould") && HAVE_BARS && !SMITHING) {
+
+        if (Local.getAnimation() == 899) {
+            lastAnimation = Instant.now();
+        }
+
+        if (lastAnimation == null || lastAnimation.plusMillis(2400).isBefore(Instant.now())) {
+            Log.info("Smelting");
+            Furnace.interact("Smelt");
+            //Time.sleepUntil(() -> !Local.isAnimating(), 3000, 10000);
+            Time.sleepUntil(() -> SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible(), 300, 2500);
+        }
+
+       /* if (Inventory.contains("Bracelet mould") && HAVE_BARS && !SMITHING) {
             Log.info("Smelting");
             Furnace.interact("Smelt");
             //Time.sleepUntil(() -> !Local.isAnimating(), 3000, 10000);
             Time.sleepUntil(() -> SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible(), 300, 5000);
-        }
+        } */
 
         if (Bank.isOpen() && !Bank.contains("Bracelet mould") && !HAVE_BARS) {
             Time.sleep(4000);

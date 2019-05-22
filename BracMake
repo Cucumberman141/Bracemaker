@@ -1,0 +1,140 @@
+    private StopWatch stopWatch;
+    public boolean HAVE_BARS = false;
+    public boolean SMITHING;
+
+    private static final Skill skill = Skill.CRAFTING;
+    private static final int INIT_XP = Skills.getExperience(skill);
+    private static final boolean enoughCoins = Inventory.getCount(995) >= 500000;
+
+    @Override
+    public void onStart() {
+        stopWatch = StopWatch.start();
+        if (!Inventory.contains("Bracelet mould")) {
+            Log.info("No mould found, withdrawing");
+            Npcs.getNearest("Banker").interact("Bank");
+            if (Bank.open()) {
+                Bank.withdraw("Bracelet mould", 1);
+                Time.sleep(300);
+            }
+            if (Bank.open() && !Bank.contains("Bracelet mould")) {
+                Log.info("No mould found, stopping");
+                setStopping(true);
+            }
+        }
+    }
+
+    @Override
+    public int loop() {
+        Player Local = Players.getLocal();
+        SceneObject Furnace = SceneObjects.getNearest("Furnace");
+        SceneObject BOOTH = SceneObjects.getNearest("Grand Exchange booth");
+        SceneObject BANK = SceneObjects.getNearest("Bank booth");
+
+        Area GRAND_EXCHANGE = Area.rectangular(3159, 3494, 3171, 3483);
+        InterfaceComponent SMITH_INTERFACE = Interfaces.getComponent(446, 0);
+        InterfaceComponent BAR_INTERFACE = Interfaces.getComponent(446, 46);
+
+        if (GRAND_EXCHANGE.contains(Local)){
+            BOOTH.interact("Exchange");
+            Log.info("Interacting with G.E");
+            Time.sleepUntil(() -> GrandExchange.isOpen(), 300, 3000);
+        }
+        if (enoughCoins) {
+            Log.info("Enough Coins true");
+            Time.sleep(1000);
+        }
+
+        if (Game.isOnCredentialsScreen()){
+            SMITHING = false;
+        }
+
+
+        if (!Movement.isRunEnabled() && Movement.getRunEnergy() > 20 && !Bank.isOpen() && SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible()){
+            Log.info("We have energy, let's run");
+            Movement.toggleRun(true);
+            return 1000;
+        }
+
+        if (Inventory.contains("Gold bar")) {
+            HAVE_BARS = true;
+        } else if (!Inventory.contains("Gold bar")) {
+            HAVE_BARS = false;
+        }
+
+        if (Inventory.contains("Bracelet mould") && !HAVE_BARS && (!Bank.isOpen())) {
+            BANK.interact("Bank");
+            Time.sleepUntil(() -> Bank.isOpen(), 250, 2500);
+            Log.info("Out of bars, banking");
+            return 2000;
+        }
+        if (Bank.isOpen()) {
+            Bank.depositAll("Gold bracelet");
+            Time.sleep(300);
+            Bank.withdrawAll("Gold bar");
+            Time.sleep(300);
+            Bank.close();
+            SMITHING = false;
+        }
+
+        if (Dialog.isViewingChat()) {
+            Dialog.processContinue();
+            SMITHING = false;
+        }
+
+
+
+        if (SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible() && Inventory.contains("Bracelet mould") && HAVE_BARS) {
+            BAR_INTERFACE.click();
+            Time.sleepUntil(() -> !Local.isAnimating(), 300, 10000);
+            SMITHING = true;
+
+        }
+        if (Inventory.contains("Bracelet mould") && HAVE_BARS && !SMITHING) {
+            Log.info("Smelting");
+            Furnace.interact("Smelt");
+            //Time.sleepUntil(() -> !Local.isAnimating(), 3000, 10000);
+            Time.sleepUntil(() -> SMITH_INTERFACE != null && SMITH_INTERFACE.isVisible() && BAR_INTERFACE != null && BAR_INTERFACE.isVisible(), 300, 5000);
+        }
+
+        if (Bank.isOpen() && !Bank.contains("Bracelet mould") && !HAVE_BARS) {
+            Time.sleep(4000);
+            Log.info("Out of bars, stopping");
+            setStopping(true);
+        }
+
+        return 1000;
+    }
+
+    @Override
+    public void onStop() {
+
+    }
+
+    @Override
+    public void notify(RenderEvent e) {
+        long seconds = stopWatch.getElapsed().getSeconds();
+        if (seconds <= 0)
+            return;
+
+        //Initialize our graphics
+        Graphics g = e.getSource();
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        int y = 38;
+        int x = 9;
+        //Background semi-transparent fill
+        g.setColor(new Color(0, 0, 0, 60));
+        g.fillRect(x - 3, 38 - 13, 175, 100);
+
+        g2.setColor(Color.white);
+        g2.drawString("Runtime: " + stopWatch.toElapsedString(), x, y);
+        g2.drawString("Crafting [" + Skills.getCurrentLevel(skill) + "]", x, y += 20);
+        g2.drawString("XP to next lvl: " + Skills.getExperienceToNextLevel(skill), x, y += 20);
+
+        //Xp gains
+        int craftXp = Skills.getExperience(skill) - INIT_XP;
+        if (craftXp > 0)
+        g2.drawString("Crafting XP: " + craftXp + " (" + (int) stopWatch.getHourlyRate(craftXp) / 1000 + "k /h)", x, y += 20);
+        g2.drawString("Bars made " + craftXp / 25, x, y += 20);
+    }
+}
